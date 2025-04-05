@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 
 <head>
     <meta charset="UTF-8" />
-    <title>Smart Banner System</title>
+    <title>ระบบแสดงแบนเนอร์</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai&display=swap" rel="stylesheet">
 
     <style>
-        /* 💬 กำหนดให้ body และ html เต็มหน้าจอ พร้อม background สีดำ */
         html,
         body {
             margin: 0;
@@ -16,16 +16,15 @@
             background: black;
             height: 100%;
             overflow: hidden;
+            font-family: 'Noto Sans Thai', sans-serif;
         }
 
-        /* 💬 กล่องหลักที่ใช้แสดงแบนเนอร์ */
         #banner {
             position: relative;
             width: 100vw;
             height: 100vh;
         }
 
-        /* 💬 คลาสสื่อภาพ/วิดีโอพื้นฐาน (ซ่อน + transition fade) */
         .banner-media {
             position: absolute;
             top: 0;
@@ -38,17 +37,15 @@
             z-index: 0;
         }
 
-        /* 💬 เมื่อสื่อถูกแสดงจริง จะทำให้ fade-in */
         .banner-media.show {
             opacity: 1;
             z-index: 10;
         }
 
-        /* 💬 กล่อง overlay แสดงชื่อแบนเนอร์ (มุมล่างขวา) */
         .banner-title {
             position: absolute;
             bottom: 20px;
-            right: 30px;
+            left: 30px;
             background: rgba(0, 0, 0, 0.6);
             padding: 0.5rem 1rem;
             color: white;
@@ -57,10 +54,20 @@
             z-index: 20;
         }
 
-        /* 💬 ปุ่ม "Skip" สำหรับเปลี่ยนแบนเนอร์ทันที */
+        .time-display {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 0.4rem 1rem;
+            font-size: 1rem;
+            border-radius: 0.5rem;
+            z-index: 20;
+        }
+
         .skip-btn {
             position: fixed;
-            /* ใช้ fixed แทน absolute */
             top: 20px;
             right: 30px;
             background: rgba(255, 255, 255, 0.2);
@@ -70,32 +77,36 @@
             border: 1px solid white;
             border-radius: 0.3rem;
             z-index: 50;
-            /* ให้สูงกว่า video/image/title */
             cursor: pointer;
             -webkit-backdrop-filter: blur(4px);
             backdrop-filter: blur(4px);
-            /* เพิ่มความโปร */
         }
     </style>
 </head>
 
 <body>
-
-    <!-- 💬 ปุ่มสำหรับ admin/dev กดข้ามแบนเนอร์ -->
-    <button class="skip-btn" onclick="nextBanner()">Skip</button>
-
-    <!-- 💬 กล่องหลักสำหรับแสดงแบนเนอร์ -->
-    <div id="banner">
-
-    </div>
+    <div id="banner"></div>
+    <button class="skip-btn" onclick="nextBanner()">ข้าม</button>
 
     <script type="module">
-        const BANNER_URL = './banners.json' // 💬 ตำแหน่ง JSON ที่ใช้เก็บข้อมูลแบนเนอร์
-        let activeBanners = [] // 💬 เก็บรายการที่ตรงเวลาปัจจุบัน
-        let currentIndex = 0   // 💬 index ของแบนเนอร์ที่กำลังแสดง
-        let preloadNext = null // 💬 สื่อถัดไปที่โหลดล่วงหน้า
+        const BANNER_URL = './banners.json'
+        let activeBanners = []
+        let currentIndex = 0
 
-        // 💬 เปิด fullscreen เมื่อผู้ใช้คลิก (มือถือ/เบราว์เซอร์ต้อง trigger interaction)
+        const formatThaiDatetime = (dateStr) => {
+            const date = new Date(dateStr)
+            const thaiTime = new Intl.DateTimeFormat('th-TH', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Asia/Bangkok'
+            }).format(date)
+            return thaiTime.replace(' ', ',')
+        }
+
         const enterFullscreen = () => {
             const el = document.documentElement
             if (el.requestFullscreen) el.requestFullscreen()
@@ -104,7 +115,6 @@
             else if (el.msRequestFullscreen) el.msRequestFullscreen()
         }
 
-        // 💬 ดึงข้อมูล banner ทั้งหมด แล้วกรองให้เหลือเฉพาะรายการที่ตรงช่วงเวลา
         const fetchBanners = async () => {
             const res = await fetch(BANNER_URL)
             const banners = await res.json()
@@ -113,95 +123,84 @@
             currentIndex = 0
         }
 
-        // 💬 โหลดสื่อถัดไปไว้ล่วงหน้า เพื่อให้แสดงได้เร็วขึ้น
         const preloadBanner = (banner) => {
             if (!banner) return
             if (banner.mediaType === 'image') {
                 const img = new Image()
                 img.src = banner.mediaUrl
-                preloadNext = img
             } else if (banner.mediaType === 'video') {
                 const video = document.createElement('video')
                 video.src = banner.mediaUrl
-                preloadNext = video
             }
         }
 
-        // 💬 แสดงแบนเนอร์ตาม currentIndex
         const showBanner = () => {
             const container = document.getElementById('banner')
-            container.innerHTML = '' // ล้างของเดิม
+            container.innerHTML = ''
 
             if (activeBanners.length === 0) {
-                container.innerHTML = `<div class="text-white text-2xl flex justify-center items-center h-full">No active banner</div>`
+                container.innerHTML = `<div class="text-white text-2xl flex justify-center items-center h-full">ไม่มีแบนเนอร์ที่กำลังแสดง</div>`
                 return
             }
 
             const banner = activeBanners[currentIndex]
 
-            // 💬 สร้าง overlay title
             const titleEl = document.createElement('div')
             titleEl.className = 'banner-title'
             titleEl.innerText = banner.title || ''
 
-            // 💬 สร้าง element media (image หรือ video)
+            const timeEl = document.createElement('div')
+            timeEl.className = 'time-display'
+            timeEl.innerText = formatThaiDatetime(new Date().toISOString())
+
             const mediaEl = document.createElement(banner.mediaType === 'video' ? 'video' : 'img')
             mediaEl.className = 'banner-media show'
             mediaEl.src = banner.mediaUrl
 
-            // 💬 ตั้งค่ากรณี video
             if (banner.mediaType === 'video') {
                 mediaEl.autoplay = true
                 mediaEl.muted = true
                 mediaEl.playsInline = true
-                if (banner.videoRepeat === -1) {
-                    mediaEl.loop = true
-                }
+                if (banner.videoRepeat === -1) mediaEl.loop = true
 
                 let playCount = 0
                 mediaEl.addEventListener('ended', () => {
                     if (banner.videoRepeat === -1) return
                     playCount++
-                    if (playCount >= banner.videoRepeat) {
-                        nextBanner()
-                    } else {
+                    if (playCount >= banner.videoRepeat) nextBanner()
+                    else {
                         mediaEl.currentTime = 0
                         mediaEl.play()
                     }
                 })
             } else {
-                // 💬 ถ้าเป็นภาพ → แสดงตามระยะเวลาที่กำหนด
                 const duration = (banner.imageDuration || 10) * 1000
-                setTimeout(() => nextBanner(), duration)
+                setTimeout(nextBanner, duration)
             }
 
             container.appendChild(mediaEl)
             container.appendChild(titleEl)
+            container.appendChild(timeEl)
 
-            // 💬 เตรียมโหลดสื่อถัดไป
             const next = activeBanners[(currentIndex + 1) % activeBanners.length]
             preloadBanner(next)
         }
 
-        // 💬 ไปยังแบนเนอร์ถัดไป
         window.nextBanner = () => {
             currentIndex = (currentIndex + 1) % activeBanners.length
             showBanner()
         }
 
-        // 💬 เริ่มการแสดงแบนเนอร์ และอัปเดตข้อมูลทุก 1 นาที
         const startLoop = async () => {
             await fetchBanners()
             showBanner()
-            setInterval(fetchBanners, 60000) // อัปเดตทุก 60 วินาที
+            setInterval(fetchBanners, 60000)
         }
 
-        // 💬 เรียก fullscreen ครั้งแรกเมื่อผู้ใช้คลิก
         document.addEventListener('click', () => {
             if (!document.fullscreenElement) enterFullscreen()
         }, { once: true })
 
-        // 💬 เริ่มระบบ
         startLoop()
     </script>
 </body>
