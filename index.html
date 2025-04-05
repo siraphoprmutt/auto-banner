@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Smart Banner System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet" />
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: black;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #banner {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .banner-media {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            z-index: 0;
+        }
+
+        .banner-media.show {
+            opacity: 1;
+            z-index: 10;
+        }
+
+        .banner-title {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 0.5rem 1rem;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 0.5rem;
+            z-index: 20;
+        }
+
+        .skip-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0.3rem 1rem;
+            font-size: 1rem;
+            border: 1px solid white;
+            border-radius: 0.3rem;
+            z-index: 30;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="banner">
+        <button class="skip-btn" onclick="nextBanner()">Skip</button>
+    </div>
+
+    <script type="module">
+        const BANNER_URL = './banners.json'
+        let activeBanners = []
+        let currentIndex = 0
+        let preloadNext = null
+
+        const enterFullscreen = () => {
+            const el = document.documentElement
+            if (el.requestFullscreen) el.requestFullscreen()
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
+            else if (el.mozRequestFullScreen) el.mozRequestFullScreen()
+            else if (el.msRequestFullscreen) el.msRequestFullscreen()
+        }
+
+        const fetchBanners = async () => {
+            const res = await fetch(BANNER_URL)
+            const banners = await res.json()
+            const now = new Date().toISOString()
+            activeBanners = banners.filter(b => now >= b.startTime && now <= b.endTime)
+            currentIndex = 0
+        }
+
+        const preloadBanner = (banner) => {
+            if (!banner) return
+            if (banner.mediaType === 'image') {
+                const img = new Image()
+                img.src = banner.mediaUrl
+                preloadNext = img
+            } else if (banner.mediaType === 'video') {
+                const video = document.createElement('video')
+                video.src = banner.mediaUrl
+                preloadNext = video
+            }
+        }
+
+        const showBanner = () => {
+            const container = document.getElementById('banner')
+            container.innerHTML = ''
+
+            if (activeBanners.length === 0) {
+                container.innerHTML = `<div class="text-white text-2xl flex justify-center items-center h-full">No active banner</div>`
+                return
+            }
+
+            const banner = activeBanners[currentIndex]
+            const titleEl = document.createElement('div')
+            titleEl.className = 'banner-title'
+            titleEl.innerText = banner.title || ''
+
+            const mediaEl = document.createElement(banner.mediaType === 'video' ? 'video' : 'img')
+            mediaEl.className = 'banner-media show'
+            mediaEl.src = banner.mediaUrl
+
+            if (banner.mediaType === 'video') {
+                mediaEl.autoplay = true
+                mediaEl.muted = true
+                mediaEl.playsInline = true
+                if (banner.videoRepeat === -1) {
+                    mediaEl.loop = true
+                }
+
+                let playCount = 0
+                mediaEl.addEventListener('ended', () => {
+                    if (banner.videoRepeat === -1) return
+                    playCount++
+                    if (playCount >= banner.videoRepeat) {
+                        nextBanner()
+                    } else {
+                        mediaEl.currentTime = 0
+                        mediaEl.play()
+                    }
+                })
+            } else {
+                const duration = (banner.imageDuration || 10) * 1000
+                setTimeout(() => nextBanner(), duration)
+            }
+
+            container.appendChild(mediaEl)
+            container.appendChild(titleEl)
+
+            // Preload next banner
+            const next = activeBanners[(currentIndex + 1) % activeBanners.length]
+            preloadBanner(next)
+        }
+
+        window.nextBanner = () => {
+            currentIndex = (currentIndex + 1) % activeBanners.length
+            showBanner()
+        }
+
+        const startLoop = async () => {
+            await fetchBanners()
+            showBanner()
+            setInterval(fetchBanners, 60000)
+        }
+
+        // เรียก fullscreen ครั้งแรกเมื่อผู้ใช้สัมผัสหรือคลิก
+        document.addEventListener('click', () => {
+            if (!document.fullscreenElement) enterFullscreen()
+        }, { once: true })
+
+        startLoop()
+    </script>
+</body>
+
+</html>
