@@ -117,9 +117,11 @@
 
         const fetchBanners = async () => {
             const res = await fetch(BANNER_URL)
-            const banners = await res.json()
-            const now = new Date().toISOString()
-            activeBanners = banners.filter(b => now >= b.startTime && now <= b.endTime)
+            /* เปิด comment เพื่อให้ทำงานถูกต้อง */
+            //const banners = await res.json()
+            //const now = new Date().toISOString()
+            //activeBanners = banners.filter(b => now >= b.startTime && now <= b.endTime)
+            activeBanners = await res.json()
             currentIndex = 0
         }
 
